@@ -25,25 +25,29 @@ def resample_ticks(df, timeframe="1s"):
     if df.empty:
         return df
 
-    # Ensure timestamp is datetime
-    df = df.copy()
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-    df = df.set_index("timestamp")
-
-    # Resample per symbol
     resampled = (
-        df.groupby("symbol")
-          .resample(timeframe)
-          .agg(
-              price=("price", "last"),
-              volume=("size", "sum")
-          )
-          .dropna()
+        df.set_index("timestamp")
+        .groupby("symbol")
+        .resample(timeframe)
+        .agg(
+            price=("price", "last"),
+            volume=("size", "sum")
+        )
+        .reset_index()
     )
 
-    # 🔴 CRITICAL: bring index levels back as columns
-    resampled = resampled.reset_index()
+    # ✅ Critical fix: forward-fill price PER SYMBOL
+    resampled["price"] = (
+        resampled
+        .groupby("symbol")["price"]
+        .ffill()
+    )
+
+    # Drop rows where price is still missing (initial buckets)
+    resampled = resampled.dropna(subset=["price"])
 
     return resampled
 
+
     
+
